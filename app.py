@@ -1,44 +1,54 @@
+# app.py
 import streamlit as st
-from streamlit_drawable_canvas import st_canvas
-import numpy as np
 import requests
+import numpy as np
 import matplotlib.pyplot as plt
 
-st.title("AI Alekhah - Draw and Get Equation")
+st.set_page_config(page_title="Alekhah AI", layout="wide")
 
-# Canvas
-canvas_result = st_canvas(
-    fill_color="rgba(255, 165, 0, 0.3)",
-    stroke_width=3,
-    stroke_color="#000000",
-    background_color="#FFFFFF",
-    height=400,
-    width=400,
-    drawing_mode="freedraw",
-    key="canvas",
-)
+st.title("Alekhah AI: Draw and Get Equation")
 
-if canvas_result.image_data is not None:
-    # Convert canvas image to x, y coordinates
-    img = canvas_result.image_data[:, :, 0]
-    y_idxs, x_idxs = np.where(img < 250)  # black pixels
-    if len(x_idxs) > 0:
-        x_norm = (x_idxs - x_idxs.min()) / (x_idxs.max() - x_idxs.min())
-        y_norm = (y_idxs - y_idxs.min()) / (y_idxs.max() - y_idxs.min())
+# --- Canvas for user input ---
+st.write("Draw your shape below (or input points manually):")
 
-        st.write("Sending points to backend...")
-        payload = {"x": x_norm.tolist(), "y": y_norm.tolist()}
+# Input points
+x_points = st.text_input("X coordinates (comma-separated)", "0,1,2,3,4,5")
+y_points = st.text_input("Y coordinates (comma-separated)", "0,1,0,-1,0,1")
 
-        # Call backend
+try:
+    x = [float(v.strip()) for v in x_points.split(",")]
+    y = [float(v.strip()) for v in y_points.split(",")]
+except:
+    st.error("Invalid input. Enter comma-separated numbers.")
+    st.stop()
+
+if st.button("Generate Equation"):
+    with st.spinner("Processing..."):
+        # Send to backend
         try:
-            response = requests.post("https://YOUR_BACKEND_URL/predict", json=payload)
-            if response.status_code == 200:
-                data = response.json()
-                st.latex(data["equation"])  # display in LaTeX
-                plt.plot(data["fitted_x"], data["fitted_y"], color="red")
-                plt.scatter(x_norm, y_norm, s=5, color="blue")
-                st.pyplot(plt)
-            else:
-                st.error("Backend error!")
+            response = requests.post(
+                "https://<YOUR_RENDER_BACKEND_URL>/predict",
+                json={"x": x, "y": y}
+            )
+            data = response.json()
+
+            fitted_x = data["fitted_x"]
+            fitted_y = data["fitted_y"]
+            latex_eq = data["latex_equation"]
+
+            # Plot original points and fitted curve
+            plt.figure(figsize=(8,5))
+            plt.scatter(x, y, color='red', label='Original Points')
+            plt.plot(fitted_x, fitted_y, color='blue', label='Fitted Curve')
+            plt.legend()
+            plt.xlabel("X")
+            plt.ylabel("Y")
+            plt.title("Curve Fitting via Alekhah AI")
+            st.pyplot(plt.gcf())
+
+            # Show LaTeX equation
+            st.markdown("### LaTeX Equation:")
+            st.latex(latex_eq)
+
         except Exception as e:
-            st.error(f"Request failed: {e}")
+            st.error(f"Error contacting backend: {e}")
